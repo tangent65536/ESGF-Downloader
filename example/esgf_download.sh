@@ -20,7 +20,7 @@ export ESGF_DATE_SCHEME="2,%04d04-%04d05"
 
 
 "${JAVA_EXE}" -jar ./ESGFDownloader.jar \
-	--dir "/grimsey/tingweh2/temp/${ESGF_ACTIVITY}/${ESGF_EXPERIMENT}/${ESGF_SOURCE}/${ESGF_VARIABLE}" \
+	--dir "./${ESGF_ACTIVITY}/${ESGF_EXPERIMENT}/${ESGF_SOURCE}/${ESGF_VARIABLE}" \
 	--node "${ESGF_NODE}" \
 	--path "${ESGF_CMIP6_PATH}" \
 	--act "${ESGF_ACTIVITY}" \
