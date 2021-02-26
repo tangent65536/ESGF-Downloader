@@ -24,6 +24,11 @@ public class ESGFDownloader
 	public final String server;
 	
 	/**
+	 * Root path for CMIP6 under /thredds/fileServer/
+	 */
+	public final String pathCMIP6;
+	
+	/**
 	 * "Activity" on ESGF.
 	 */
 	public final String activity;
@@ -105,10 +110,12 @@ public class ESGFDownloader
 	
 	/**
 	 * @param node Server node
+	 * @param path File path under /thredds/fileServer/
 	 * @param act Activity
 	 * @param inst Institution ID
 	 * @param src Source ID
 	 * @param expr Experiment ID
+	 * @param sub Sub-experiment (can be null)
 	 * @param i i
 	 * @param p p
 	 * @param f f
@@ -121,9 +128,10 @@ public class ESGFDownloader
 	 * @param enc Model filename format for starting and ending date
 	 * @param attempt Max attempts if the download process fails for a file
 	 */
-	public ESGFDownloader(String node, String act, String inst, String src, String expr, String sub_, int i, int p, int f, String tabl, String var, String grid, String ver, int rMin, int rMax, Function<Integer, String> enc, int attempt)
+	public ESGFDownloader(String node, String path, String act, String inst, String src, String expr, String sub_, int i, int p, int f, String tabl, String var, String grid, String ver, int rMin, int rMax, Function<Integer, String> enc, int attempt)
 	{
 		this.server = node;
+		this.pathCMIP6 = path;
 		this.activity = act;
 		this.institution = inst;
 		this.source = src;
@@ -145,7 +153,7 @@ public class ESGFDownloader
 	/**
 	 * @param dir Output directory
 	 */
-	public void download(File dir) throws Exception
+	public void download(File dir)
 	{
 		URL url;
 		String file, sUrl;
@@ -166,12 +174,12 @@ public class ESGFDownloader
 			if(this.sub == null)
 			{
 				file = String.format("%s_%s_%s_%s_r%di%dp%df%d_%s_%s.nc", this.variable, this.table, this.source, this.experiment, i, this.label_i, this.label_p, this.label_f, this.grid_label, modelDates);
-				sUrl = String.format("https://%s/thredds/fileServer/esg_dataroot/CMIP6/%s/%s/%s/%s/r%di%dp%df%d/%s/%s/%s/%s/%s", this.server, this.activity, this.institution, this.source, this.experiment, i, this.label_i, this.label_p, this.label_f, this.table, this.variable, this.grid_label, this.version, file);
+				sUrl = String.format("https://%s/thredds/fileServer/%s/%s/%s/%s/%s/r%di%dp%df%d/%s/%s/%s/%s/%s", this.server, this.pathCMIP6, this.activity, this.institution, this.source, this.experiment, i, this.label_i, this.label_p, this.label_f, this.table, this.variable, this.grid_label, this.version, file);
 			}
 			else
 			{
 				file = String.format("%s_%s_%s_%s_%s-r%di%dp%df%d_%s_%s.nc", this.variable, this.table, this.source, this.experiment, this.sub, i, this.label_i, this.label_p, this.label_f, this.grid_label, modelDates);
-				sUrl = String.format("https://%s/thredds/fileServer/esg_dataroot/CMIP6/%s/%s/%s/%s/%s-r%di%dp%df%d/%s/%s/%s/%s/%s", this.server, this.activity, this.institution, this.source, this.experiment, this.sub, i, this.label_i, this.label_p, this.label_f, this.table, this.variable, this.grid_label, this.version, file);
+				sUrl = String.format("https://%s/thredds/fileServer/%s/%s/%s/%s/%s/%s-r%di%dp%df%d/%s/%s/%s/%s/%s", this.server, this.pathCMIP6, this.activity, this.institution, this.source, this.experiment, this.sub, i, this.label_i, this.label_p, this.label_f, this.table, this.variable, this.grid_label, this.version, file);
 			}
 			
 			// System.out.println(sUrl);
@@ -228,6 +236,7 @@ public class ESGFDownloader
 	{
 		REQUIRED_ARGS.add("dir");
 		REQUIRED_ARGS.add("node");
+		REQUIRED_ARGS.add("path");
 		REQUIRED_ARGS.add("act");
 		REQUIRED_ARGS.add("inst");
 		REQUIRED_ARGS.add("src");
@@ -247,6 +256,7 @@ public class ESGFDownloader
 		
 		ARGUMENTS.put("dir", "<output dir>         Output directory to store the files.");
 		ARGUMENTS.put("node", "<domain>            Server that the program should download data from.");
+		ARGUMENTS.put("path", "<path>              Root path for CMIP6 datasets on the server under /thredds/fileServer/.");
 		ARGUMENTS.put("act", "<activity ID>        Activity ID.");
 		ARGUMENTS.put("inst", "<institution ID>    Institution ID.");
 		ARGUMENTS.put("src", "<source ID>          Source ID.");
@@ -487,6 +497,7 @@ public class ESGFDownloader
 		}
 		
 		ESGFDownloader downloader = new ESGFDownloader(ARGUMENTS.get("node"),
+		                                               ARGUMENTS.get("path"),
 		                                               ARGUMENTS.get("act"),
 		                                               ARGUMENTS.get("inst"),
 		                                               ARGUMENTS.get("src"),
