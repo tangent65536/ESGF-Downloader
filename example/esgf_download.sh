@@ -18,6 +18,13 @@ export ESGF_VERSION="v20201012"
 export ESGF_RUNS="1,300"
 export ESGF_DATE_SCHEME="2,%04d04-%04d05"
 
+export ESGF_UNSAFE="false"
+
+if [ $ESGF_UNSAFE ]; then
+  export ESGF_UNSAFE="--unsafe"
+else
+  unset ESGF_UNSAFE
+fi
 
 "${JAVA_EXE}" -jar ./ESGFDownloader.jar \
 	--dir "./${ESGF_ACTIVITY}/${ESGF_EXPERIMENT}/${ESGF_SOURCE}/${ESGF_VARIABLE}" \
@@ -35,5 +42,5 @@ export ESGF_DATE_SCHEME="2,%04d04-%04d05"
 	--grid "${ESGF_GRID}" \
 	--ver "${ESGF_VERSION}" \
 	--runs "${ESGF_RUNS}" \
-	--datf "${ESGF_DATE_SCHEME}"
-
+	--datf "${ESGF_DATE_SCHEME}" \
+        "${ESGF_UNSAFE}"
