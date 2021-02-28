@@ -3,12 +3,19 @@ package tangent65536.uci;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
-import java.net.HttpURLConnection;
 import java.net.URL;
+import java.security.SecureRandom;
+import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.function.Function;
+
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLException;
+import javax.net.ssl.SSLSocketFactory;
+import javax.net.ssl.X509TrustManager;
 
 /**
  * @author Copyright (c) 2021, Tangent65536.
@@ -109,6 +116,11 @@ public class ESGFDownloader
 	public final int maxAttempts;
 	
 	/**
+	 * Yes we may have to deal with some legendary servers that still enforce self-signed certificates in 2021.
+	 */
+	private static final HashSet<String> UNTRUSTED_SERVERS_BYPASS = new HashSet<>();
+	
+	/**
 	 * @param node Server node
 	 * @param path File path under /thredds/fileServer/
 	 * @param act Activity
@@ -165,7 +177,14 @@ public class ESGFDownloader
 		
 		String modelDates;
 		
+		boolean untrusted = false;
+		
 		dir.mkdirs();
+		
+		if(UNTRUSTED_SERVERS_BYPASS.contains(this.server))
+		{
+			untrusted = true;
+		}
 		
 		for(i = this.runMin ; i <= this.runMax ; i++)
 		{
@@ -189,7 +208,11 @@ public class ESGFDownloader
 				try
 				{
 					url = new URL(sUrl);
-					HttpURLConnection conn = (HttpURLConnection)url.openConnection();
+					HttpsURLConnection conn = (HttpsURLConnection)url.openConnection();
+					if(untrusted)
+					{
+						conn.setSSLSocketFactory(BYPASS_FACTORY);
+					}
 					conn.setConnectTimeout(30000);
 					
 					if((len = conn.getResponseCode()) / 100 == 2)
@@ -206,7 +229,14 @@ public class ESGFDownloader
 						fos.close();
 						is.close();
 						
-						System.out.println("Done!");
+						if(untrusted)
+						{
+							System.out.println("Done (untrusted SSL download)!");
+						}
+						else
+						{
+							System.out.println("Done!");
+						}
 						System.out.flush();
 						
 						break;
@@ -218,6 +248,17 @@ public class ESGFDownloader
 					
 					conn.disconnect();
 				}
+				catch(SSLException ssle)
+				{
+					System.err.println(String.format("Failed to download file with index = %d (BAD SSL).", i));
+					ssle.printStackTrace();
+					
+					if(ALLOW_UNSAFE_SSL)
+					{
+						UNTRUSTED_SERVERS_BYPASS.add(this.server);
+						untrusted = true;
+					}
+				}
 				catch(Exception e)
 				{
 					System.err.println(String.format("Failed to download file with index = %d (EXCEPTION).", i));
@@ -227,6 +268,63 @@ public class ESGFDownloader
 		}
 	}
 	
+	
+	/**
+	 * Edited from https://stackoverflow.com/a/2893932/5722339
+	 * 
+	 * Why would I need this? It's because the following servers have operators so lazy
+	 *  and un-educated towards cyber-security, that they decided it's a good idea to
+	 *  use self-signed SSL certificates!
+	 * 
+	 *  "esg.lasg.ac.cn"           <- in China
+	 *  "esgf-data2.diasjp.net"    <- in Japan
+	 *  "noresg.nird.sigma2.no"    <- in Norway
+	 *  "esgf.rcec.sinica.edu.tw"  <- in Taiwan
+	 * 
+	 * Doesn't plain HTTP work? Well you're right! It DOESN'T!! You think you can out-
+	 *  smart them?
+	 * 
+	 * If you are somehow a manager of one of these servers, I know what you're thinking:
+	 *  "Instead of going through the hassle and applying for verified SSL certificates,
+	 *  why not just sign them ourselves? Free HTTPS without wasting time and money or
+	 *  worrying about certificates expiring! Big brain time!!1!1one hundred and eleven"
+	 * 
+	 * Bruh. It's 2021. Unbelievable, huh. Now go fix your servers.
+	 * 
+	 * What are you waiting for? FIX YOUR G*DD%MN SERVERS!!!!!
+	 * 
+	 * . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . . .
+	 * 
+	 * Oh did I mentioned never-expiring certificates? Nvm lol. That Japanese server has
+	 *  its self-signed certificate expired in 2018. What a legend.
+	 */
+	private static class X509BypassManager implements X509TrustManager
+	{
+		private static final X509Certificate[] BLANK = new X509Certificate[0];
+		
+		public X509Certificate[] getAcceptedIssuers()
+		{
+			return BLANK;
+		}
+		
+		public void checkClientTrusted(X509Certificate[] certs, String authType) {}
+		
+		public void checkServerTrusted(X509Certificate[] certs, String authType) {}
+	}
+	
+	private static final SSLSocketFactory BYPASS_FACTORY;
+	private static boolean ALLOW_UNSAFE_SSL = false;
+	
+	@Deprecated
+	public static boolean allowUntrustedBypass(boolean val)
+	{
+		if(BYPASS_FACTORY != null)
+		{
+			ALLOW_UNSAFE_SSL = val;
+		}
+		return ALLOW_UNSAFE_SSL;
+	}
+	
 	private static final HashMap<String, String> ARGUMENTS = new HashMap<>();
 	
 	private static final ArrayList<String> REQUIRED_ARGS = new ArrayList<>();
@@ -234,6 +332,20 @@ public class ESGFDownloader
 	
 	static
 	{
+		SSLSocketFactory sslFactory = null;
+		try
+		{
+			final X509TrustManager[] bypassMgr = new X509TrustManager[] {new X509BypassManager()};
+			final SSLContext sc = SSLContext.getInstance("SSL");
+			sc.init(null, bypassMgr, new SecureRandom());
+			sslFactory = sc.getSocketFactory();
+		}
+		catch(Exception e)
+		{
+			e.printStackTrace();
+		}
+		BYPASS_FACTORY = sslFactory;
+		
 		REQUIRED_ARGS.add("dir");
 		REQUIRED_ARGS.add("node");
 		REQUIRED_ARGS.add("path");
@@ -272,6 +384,8 @@ public class ESGFDownloader
 		ARGUMENTS.put("runs", "<min>,<max>         Runs that should be downloaded.");
 		ARGUMENTS.put("datf", "<scheme>,<fmt>      Schemes and expression for model output dates.");
 		ARGUMENTS.put("attempt", "<max attempts>   Maximum attempts when downloading process fails\n                             for a file. Default is 8.");
+	
+		ARGUMENTS.put("unsafe", "                  (DEPRECATED) Allow unsafe access to servers using\n                             invalid (usually self-signed) SSL certificates.");
 	}
 
 	public static void main(String[] args) throws Exception
@@ -334,6 +448,21 @@ public class ESGFDownloader
 				if(args[i].startsWith("--"))
 				{
 					args[i] = args[i].substring(2).toLowerCase();
+					
+					if(args[i].equals("unsafe") && !ALLOW_UNSAFE_SSL)
+					{
+						if(BYPASS_FACTORY != null)
+						{
+							ALLOW_UNSAFE_SSL = true;
+							continue;
+						}
+						else
+						{
+							System.err.println("Cannot setup '--unsafe' flag due to system settings.");
+							return;
+						}
+					}
+					
 					if(REQUIRED_ARGS.remove(args[i]) || RECOGNIZED_ARGS.remove(args[i]))
 					{
 						sCache = args[i];
